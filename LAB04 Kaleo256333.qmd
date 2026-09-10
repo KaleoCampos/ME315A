@@ -1,0 +1,153 @@
+---
+title: "Lab04 Kaleo256333"
+author: "Kaleo Campos"
+date: today
+format:
+  pdf:
+    toc: false
+execute:
+  warning: false
+  message: false
+---
+
+## Questão 1
+
+Carregue os pacotes `readxl` e `tidyverse`.
+
+```{r}
+library(readxl)
+library(tidyverse)
+```
+
+## Questão 2
+
+Crie uma variável chamada `fname` que contenha o caminho para o arquivo `WDIEXCEL.xlsx`, disponível no seu diretório de dados. Confirme que o R identifica a existência do arquivo utilizando o comando `file.exists`.
+
+```{r}
+fname <- "WDIEXCEL.xlsx"
+file.exists(fname)
+```
+
+## Questão 3
+
+Leia a planilha "Country" e armazene no objeto `countries`.
+
+```{r}
+countries <- read_excel(fname, sheet = "Country")
+countries
+```
+
+## Questão 4
+
+Mantenha os registros de 5 países (Brasil e outros 4 de sua escolha).
+
+Os países escolhidos foram Brasil, Argentina, Chile, Colômbia e México.
+
+```{r}
+paises <- c("BRA", "ARG", "CHL", "COL", "MEX")
+
+countries <- countries %>%
+  filter(`Country Code` %in% paises)
+
+countries %>%
+  select(`Country Code`, `Short Name`)
+```
+
+## Questão 5
+
+Leia a planilha "Data" e armazene no objeto `WDI`.
+
+```{r}
+WDI <- read_excel(fname, sheet = "Data")
+dim(WDI)
+names(WDI)[1:8]
+```
+
+## Questão 6
+
+Selecione apenas as colunas `Country Code`, `Indicator Code` e todos os anos de 1960 a 2018.
+
+```{r}
+WDI <- WDI %>%
+  select(`Country Code`, `Indicator Code`, `1960`:`2018`)
+
+WDI
+```
+
+## Questão 7
+
+Confirme se os dados em `WDI` estão em formato tidy. Se não estiverem, transforme-os para tal formato. Faça de forma que exista uma coluna referente ao ano chamada `YEAR`.
+
+```{r}
+WDI <- WDI %>%
+  pivot_longer(
+    cols             = `1960`:`2018`,
+    names_to         = "YEAR",
+    values_to        = "valor",
+    values_transform = list(valor = as.numeric)
+  )
+
+WDI
+```
+
+## Questão 8
+
+Confirme se a coluna referente ao ano está em formato inteiro.
+
+```{r}
+class(WDI$YEAR)
+
+WDI <- WDI %>%
+  mutate(YEAR = as.integer(YEAR))
+
+class(WDI$YEAR)
+```
+
+## Questão 9
+
+Para o objeto `WDI`, mantenha apenas os registros dos países listados em `countries`. Selecione as colunas `Country Code`, `Short Name`, `YEAR` e `SP.DYN.CBRT.IN`.
+
+```{r}
+WDI <- WDI %>%
+  inner_join(countries, by = "Country Code") %>%
+  filter(`Indicator Code` == "SP.DYN.CBRT.IN") %>%
+  pivot_wider(
+    id_cols     = c(`Country Code`, `Short Name`, YEAR),
+    names_from  = `Indicator Code`,
+    values_from = valor
+  )
+
+WDI
+```
+
+## Questão 10
+
+Ordene o objeto de forma que, para cada país, as informações estejam ordenadas por ano.
+
+```{r}
+WDI <- WDI %>%
+  arrange(`Short Name`, YEAR)
+
+WDI
+```
+
+## Questão 11
+
+Construa um gráfico de linhas, usando o pacote `ggplot2`, que tenha no eixo X a variável `YEAR`, no eixo Y a variável `SP.DYN.CBRT.IN` e que cada linha corresponda a um país diferente.
+
+```{r}
+ggplot(WDI, aes(x = YEAR, y = SP.DYN.CBRT.IN, colour = `Short Name`)) +
+  geom_line() +
+  labs(
+    x      = "Ano",
+    y      = "Taxa bruta de natalidade (por 1.000 habitantes)",
+    colour = "País",
+    title  = "Taxa bruta de natalidade, 1960 a 2018"
+  ) +
+  theme_bw()
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
