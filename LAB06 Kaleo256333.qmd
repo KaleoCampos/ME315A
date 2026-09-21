@@ -1,0 +1,153 @@
+---
+title: "Lab06 Kaleo256333"
+author: "Kaleo Campos"
+date: today
+format:
+  pdf:
+    toc: false
+editor: source
+execute:
+  warning: false
+  message: false
+---
+
+```{r}
+library(DBI)
+library(RSQLite)
+```
+
+## Questão 1
+
+Baixe o arquivo `disco.db` e armazene na variável `path` o caminho completo (pasta) na qual o arquivo foi gravado. Utilize o comando `file.path()` para combinar a variável `path` com o nome do arquivo (`disco.db`) e obter o nome do arquivo com seu respectivo caminho. Armazene este resultado na variável `fname`.
+
+```{r}
+path  <- getwd()
+fname <- file.path(path, "disco.db")
+
+file.exists(fname)
+```
+
+## Questão 2
+
+Utilizando o pacote `RSQLite`, conecte-se ao arquivo de banco de dados. Armazene a conexão na variável `conn`.
+
+```{r}
+conn <- dbConnect(SQLite(), fname)
+conn
+```
+
+## Questão 3
+
+Liste as tabelas existentes no banco de dados.
+
+```{r}
+dbListTables(conn)
+```
+
+## Questão 4
+
+Identifique os nomes de todas as colunas existentes na tabela `customers`.
+
+```{r}
+dbListFields(conn, "customers")
+```
+
+## Questão 5
+
+Utilizando apenas SQLite, com o apoio do comando `dbGetQuery`, identifique quantos clientes estão atualmente cadastrados neste banco de dados.
+
+```{r}
+dbGetQuery(conn, "SELECT COUNT(*) AS total_clientes FROM customers")
+```
+
+## Questão 6
+
+Utilizando apenas SQLite, identifique o número de países diferentes em que moram os clientes encontrados acima.
+
+```{r}
+dbGetQuery(conn, "SELECT COUNT(DISTINCT country) AS total_paises FROM customers")
+```
+
+## Questão 7
+
+Utilizando apenas SQLite, quantos clientes existem por país? A tabela resultante deve conter o nome do país e a respectiva contagem, além de ser ordenada de maneira decrescente pela referida contagem.
+
+```{r}
+sql <- paste(
+  "SELECT country AS pais, COUNT(*) AS clientes",
+  "FROM customers",
+  "GROUP BY country",
+  "ORDER BY clientes DESC"
+)
+
+clientes_por_pais <- dbGetQuery(conn, sql)
+knitr::kable(clientes_por_pais)
+```
+
+## Questão 8
+
+Quais são os 5 países com mais clientes registrados? Use apenas SQLite.
+
+```{r}
+sql <- paste(
+  "SELECT country AS pais, COUNT(*) AS clientes",
+  "FROM customers",
+  "GROUP BY country",
+  "ORDER BY clientes DESC",
+  "LIMIT 5"
+)
+
+knitr::kable(dbGetQuery(conn, sql))
+```
+
+## Questão 9
+
+Quais são os países registrados que possuem apenas 6 letras no nome?
+
+```{r}
+sql <- paste(
+  "SELECT DISTINCT country AS pais",
+  "FROM customers",
+  "WHERE country GLOB '??????'",
+  "ORDER BY pais"
+)
+
+knitr::kable(dbGetQuery(conn, sql))
+```
+
+## Questão 10
+
+Quais foram as músicas compradas por clientes brasileiros?
+
+```{r}
+sql <- paste(
+  "SELECT t.name AS musica, SUM(ii.quantity) AS unidades",
+  "FROM customers c",
+  "INNER JOIN invoices i ON c.customerid = i.customerid",
+  "INNER JOIN invoice_items ii ON i.invoiceid = ii.invoiceid",
+  "INNER JOIN tracks t ON ii.trackid = t.trackid",
+  "WHERE c.country = 'Brazil'",
+  "GROUP BY t.name",
+  "ORDER BY unidades DESC, musica"
+)
+
+musicas_brasil <- dbGetQuery(conn, sql)
+nrow(musicas_brasil)
+```
+
+```{r}
+knitr::kable(head(musicas_brasil, 15))
+```
+
+## Questão 11
+
+Desconecte do banco de dados.
+
+```{r}
+dbDisconnect(conn)
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
