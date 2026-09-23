@@ -1,0 +1,203 @@
+---
+title: "Lab07 Kaleo256333"
+author: "Kaleo Campos"
+date: today
+format:
+  pdf:
+    toc: false
+editor: source
+execute:
+  warning: false
+  message: false
+---
+
+```{r}
+library(DBI)
+library(RSQLite)
+```
+
+## Questão 1
+
+Baixe o arquivo `uwmadison.sqlite3`. Conecte-se a ele usando o pacote `RSQLite`, armazenando a conexão em uma variável `conn`.
+
+```{r}
+conn <- dbConnect(SQLite(), "uwmadison.sqlite3")
+
+dbListTables(conn)
+```
+
+## Questão 2
+
+Quem são e quantos são os professores que lecionaram disciplinas cujo tópico era estatística (`subjects.abbreviation='STAT'`)?
+
+```{r}
+ofertas_stat <- paste(
+  "SELECT course_offering_uuid FROM subject_memberships",
+  "WHERE subject_code IN",
+  "(SELECT code FROM subjects WHERE abbreviation = 'STAT')"
+)
+
+sql <- paste(
+  "SELECT DISTINCT i.id AS id, i.name AS professor",
+  "FROM instructors i",
+  "INNER JOIN teachings t ON i.id = t.instructor_id",
+  "INNER JOIN sections sec ON t.section_uuid = sec.uuid",
+  "WHERE sec.course_offering_uuid IN (", ofertas_stat, ")",
+  "ORDER BY professor"
+)
+
+professores_stat <- dbGetQuery(conn, sql)
+nrow(professores_stat)
+```
+
+São `r nrow(professores_stat)` professores. A lista completa, em ordem alfabética:
+
+```{r}
+knitr::kable(professores_stat, row.names = FALSE)
+```
+
+## Questão 3
+
+O GPA americano é definido numa escala de 0 a 4, em que A = 4, AB = 3.5, B = 3, BC = 2.5, C = 2, D = 1 e F = 0. Determinando a nota média de cada oferecimento pela ponderação da quantidade de alunos em cada extrato com os valores numéricos de cada conceito, indique (no que se refere a disciplinas no assunto de estatística):
+
+- Quem é o professor mais difícil?
+- Quem é o professor mais fácil?
+- Qual é a disciplina mais difícil?
+- Qual é a disciplina mais fácil?
+
+```{r}
+notas <- paste(
+  "SELECT gd.course_offering_uuid AS oferecimento,",
+  "gd.section_number AS secao,",
+  "4.0*gd.a_count + 3.5*gd.ab_count + 3.0*gd.b_count +",
+  "2.5*gd.bc_count + 2.0*gd.c_count + 1.0*gd.d_count AS pontos,",
+  "gd.a_count + gd.ab_count + gd.b_count + gd.bc_count +",
+  "gd.c_count + gd.d_count + gd.f_count AS alunos",
+  "FROM grade_distributions gd",
+  "WHERE gd.course_offering_uuid IN (", ofertas_stat, ")"
+)
+```
+
+Para comparar professores e disciplinas, agregamos as notas válidas ponderando
+pelo número de alunos; em caso de empate, apresentamos todos os resultados.
+
+### Nota média por oferecimento
+
+```{r}
+sql <- paste(
+  "SELECT g.oferecimento, c.name AS disciplina,",
+  "SUM(g.pontos) / SUM(g.alunos) AS gpa_medio,",
+  "SUM(g.alunos) AS alunos",
+  "FROM (", notas, ") g",
+  "INNER JOIN course_offerings co ON g.oferecimento = co.uuid",
+  "INNER JOIN courses c ON co.course_uuid = c.uuid",
+  "GROUP BY g.oferecimento, c.uuid, c.name",
+  "HAVING SUM(g.alunos) > 0",
+  "ORDER BY gpa_medio, g.oferecimento"
+)
+
+gpa_oferecimentos <- dbGetQuery(conn, sql)
+nrow(gpa_oferecimentos)
+```
+
+```{r}
+knitr::kable(head(gpa_oferecimentos[c("disciplina", "gpa_medio", "alunos")], 10),
+             digits = 2)
+```
+
+### Professores
+
+```{r}
+professores_secoes <- paste(
+  "SELECT DISTINCT t.instructor_id,",
+  "sec.course_offering_uuid AS oferecimento, sec.number AS secao",
+  "FROM teachings t",
+  "INNER JOIN sections sec ON t.section_uuid = sec.uuid"
+)
+
+sql <- paste(
+  "SELECT i.id AS id, i.name AS professor,",
+  "SUM(g.pontos) / SUM(g.alunos) AS gpa_medio,",
+  "SUM(g.alunos) AS alunos",
+  "FROM (", notas, ") g",
+  "INNER JOIN (", professores_secoes, ") ps",
+  "ON g.oferecimento = ps.oferecimento AND g.secao = ps.secao",
+  "INNER JOIN instructors i ON ps.instructor_id = i.id",
+  "GROUP BY i.id, i.name",
+  "HAVING SUM(g.alunos) > 0",
+  "ORDER BY gpa_medio, professor, id"
+)
+
+gpa_professores <- dbGetQuery(conn, sql)
+```
+
+#### Professor mais difícil
+
+```{r}
+professores_dificeis <- gpa_professores[
+  gpa_professores$gpa_medio == min(gpa_professores$gpa_medio), ]
+
+knitr::kable(professores_dificeis, digits = 2, row.names = FALSE)
+```
+
+#### Professores mais fáceis
+
+```{r}
+professores_faceis <- gpa_professores[
+  gpa_professores$gpa_medio == max(gpa_professores$gpa_medio), ]
+
+nrow(professores_faceis)
+knitr::kable(professores_faceis, digits = 2, row.names = FALSE)
+```
+
+### Disciplinas
+
+```{r}
+sql <- paste(
+  "SELECT c.uuid AS id, c.name AS disciplina,",
+  "SUM(g.pontos) / SUM(g.alunos) AS gpa_medio,",
+  "SUM(g.alunos) AS alunos",
+  "FROM (", notas, ") g",
+  "INNER JOIN course_offerings co ON g.oferecimento = co.uuid",
+  "INNER JOIN courses c ON co.course_uuid = c.uuid",
+  "GROUP BY c.uuid, c.name",
+  "HAVING SUM(g.alunos) > 0",
+  "ORDER BY gpa_medio, disciplina, id"
+)
+
+gpa_disciplinas <- dbGetQuery(conn, sql)
+```
+
+#### Disciplina mais difícil
+
+```{r}
+disciplinas_dificeis <- gpa_disciplinas[
+  gpa_disciplinas$gpa_medio == min(gpa_disciplinas$gpa_medio), ]
+
+knitr::kable(disciplinas_dificeis[c("disciplina", "gpa_medio", "alunos")],
+             digits = 2, row.names = FALSE)
+```
+
+#### Disciplinas mais fáceis
+
+```{r}
+disciplinas_faceis <- gpa_disciplinas[
+  gpa_disciplinas$gpa_medio == max(gpa_disciplinas$gpa_medio), ]
+
+nrow(disciplinas_faceis)
+knitr::kable(disciplinas_faceis[c("disciplina", "gpa_medio", "alunos")],
+             digits = 2, row.names = FALSE)
+```
+
+## Questão 4
+
+Desconecte do banco de dados.
+
+```{r}
+dbDisconnect(conn)
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
