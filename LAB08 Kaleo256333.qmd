@@ -1,0 +1,126 @@
+---
+title: "Lab08 Kaleo256333"
+author: "Kaleo Campos"
+date: today
+format:
+  pdf:
+    toc: false
+    monofont: Consolas
+editor: source
+engine: knitr
+execute:
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+Sys.setenv(RETICULATE_PYTHON = "managed", UV_OFFLINE = "1")
+reticulate::py_require("polars==2.0.0")
+```
+
+```{python}
+import polars as pl
+
+basics = pl.read_csv(
+    "title.basics0.tsv.gz",
+    separator="\t",
+    null_values="\\N",
+    quote_char=None,
+    columns=["tconst", "titleType", "primaryTitle", "genres"]
+).filter(pl.col("titleType") == "movie")
+
+ratings = pl.read_csv(
+    "title.ratings.tsv.gz",
+    separator="\t",
+    null_values="\\N"
+)
+
+filmes = basics.join(ratings, on="tconst", how="inner")
+```
+
+## Questão 1
+
+Quais são os 5 filmes com as maiores notas (`averageRating`)? Apresente uma solução capaz de desempatar os filmes baseando-se no número de votos recebidos.
+
+```{python}
+melhores_filmes = (
+    filmes
+    .sort(
+        ["averageRating", "numVotes", "tconst"],
+        descending=[True, True, False]
+    )
+    .select(["tconst", "primaryTitle", "averageRating", "numVotes"])
+    .head(5)
+)
+
+melhores_filmes
+```
+
+## Questão 2
+
+Qual é o gênero mais frequente entre os filmes com nota maior que 8?
+
+```{python}
+frequencia_generos = (
+    filmes
+    .filter(pl.col("averageRating") > 8)
+    .drop_nulls("genres")
+    .with_columns(pl.col("genres").str.split(","))
+    .explode("genres")
+    .group_by("genres")
+    .agg(pl.col("tconst").n_unique().alias("n_filmes"))
+)
+
+genero_mais_frequente = (
+    frequencia_generos
+    .filter(pl.col("n_filmes") == pl.col("n_filmes").max())
+    .sort("genres")
+)
+
+genero_mais_frequente
+```
+
+## Questão 3
+
+Quais são os 3 atores/atrizes que mais participaram de filmes com nota maior que 7.5?
+
+```{python}
+principals = pl.read_csv(
+    "title.principals0.tsv.gz",
+    separator="\t",
+    null_values="\\N",
+    quote_char=None,
+    columns=["tconst", "nconst", "category"]
+).filter(
+    pl.col("category").is_in(["actor", "actress"])
+).drop_nulls("nconst").select(["tconst", "nconst"])
+
+atores = (
+    principals
+    .join(
+        filmes.filter(pl.col("averageRating") > 7.5).select("tconst"),
+        on="tconst", how="inner"
+    )
+    .group_by("nconst")
+    .agg(pl.col("tconst").n_unique().alias("n_filmes"))
+    .sort(["n_filmes", "nconst"], descending=[True, False])
+    .head(3)
+)
+```
+
+{{< pagebreak >}}
+
+```{python}
+#| echo: false
+atores
+```
+
+Os arquivos identificam os atores/atrizes por `nconst` e não contêm seus nomes.
+
+```{python}
+from datetime import datetime
+
+print(datetime.now().astimezone())
+```
