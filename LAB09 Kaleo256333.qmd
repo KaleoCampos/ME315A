@@ -1,0 +1,144 @@
+---
+title: "Lab09 Kaleo256333"
+author: "Kaleo Campos"
+date: today
+format:
+  pdf:
+    toc: false
+    monofont: Consolas
+editor: source
+engine: knitr
+execute:
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+Sys.setenv(RETICULATE_PYTHON = "managed", UV_OFFLINE = "1")
+reticulate::py_require("plotnine==0.15.8", python_version = "3.13.16")
+```
+
+## Questão 1
+
+Importe o conjunto de dados `diamonds`, cujo arquivo está disponível no site da disciplina.
+
+```{python}
+import pandas as pd
+from plotnine import (
+    ggplot, aes, geom_point, facet_grid, labs, theme_bw, theme,
+    scale_x_continuous, scale_y_continuous
+)
+
+ordem_corte = ["Fair", "Good", "Very Good", "Premium", "Ideal"]
+ordem_cor = ["D", "E", "F", "G", "H", "I", "J"]
+ordem_clareza = ["I1", "SI2", "SI1", "VS2", "VS1", "VVS2", "VVS1", "IF"]
+
+diamonds = pd.read_csv(
+    "diamonds.csv.gz",
+    dtype={
+        "cut": pd.CategoricalDtype(ordem_corte, ordered=True),
+        "color": pd.CategoricalDtype(ordem_cor, ordered=True),
+        "clarity": pd.CategoricalDtype(ordem_clareza, ordered=True)
+    }
+)
+
+print("Linhas:", diamonds.shape[0])
+print("Colunas:", diamonds.shape[1])
+```
+
+## Questão 2
+
+Crie uma visualização de dados que descreva a associação existente entre as variáveis de peso (`carat`) e preço (`price`). Que ações você tomou para garantir que produzisse um gráfico de boa qualidade? Escreva um parágrafo comunicando suas descobertas.
+
+```{python}
+#| fig-pos: H
+grafico_peso_preco = (
+    ggplot(diamonds, aes(x="carat", y="price"))
+    + geom_point(alpha=0.15, size=0.5, color="#2166AC")
+    + theme_bw()
+    + theme(figure_size=(7, 4))
+    + labs(
+        title="Preço e peso dos diamantes",
+        x="Peso (quilates)",
+        y="Preço (US$)"
+    )
+)
+
+grafico_peso_preco.show()
+```
+
+O preço tende a aumentar com o peso do diamante, mas a relação não é uma linha reta e existe uma grande variação de preços para um mesmo peso. A dispersão dos preços também aumenta em parte da faixa de pesos observada. Usei pontos pequenos e transparência para reduzir a sobreposição das 53.940 observações, além de um tema simples e eixos identificados com suas unidades. Mantive todas as observações para mostrar tanto a concentração de diamantes menores quanto os exemplares de maior peso.
+
+## Questão 3
+
+A relação identificada na questão anterior é a mesma relação presente nos diferentes cortes de diamantes? Crie uma visualização que demonstre suas descobertas de forma eficiente. Descreva sua conclusão em um parágrafo.
+
+```{python}
+#| fig-pos: H
+grafico_cortes = (
+    ggplot(diamonds, aes(x="carat", y="price"))
+    + geom_point(alpha=0.15, size=0.5, color="#2166AC")
+    + facet_grid(rows="cut")
+    + theme_bw()
+    + theme(figure_size=(7, 7))
+    + labs(
+        title="Preço e peso por qualidade de corte",
+        x="Peso (quilates)",
+        y="Preço (US$)"
+    )
+)
+
+grafico_cortes.show()
+```
+
+A associação positiva entre peso e preço aparece nas cinco categorias de corte. Entretanto, a distribuição dos pontos e a faixa de preços para um mesmo peso não são idênticas entre os painéis. Mantive as mesmas escalas para permitir a comparação direta. Portanto, a tendência geral se repete, mas o corte sozinho não explica toda a variação de preços; cor e clareza também precisam ser consideradas.
+
+{{< pagebreak >}}
+
+## Questão 4
+
+Crie uma visualização que mostre a relação entre preço e peso do diamante, considerando as diferentes categorias de qualidade de corte, cor e clareza do diamante. Quais foram as dificuldades encontradas? A relação entre preço e peso é a mesma para diferentes configurações de diamantes?
+
+```{python}
+#| fig-pos: H
+pares_clareza = [
+    ["I1", "SI2"],
+    ["SI1", "VS2"],
+    ["VS1", "VVS2"],
+    ["VVS1", "IF"]
+]
+
+for par in pares_clareza:
+    dados = diamonds[diamonds["clarity"].isin(par)]
+
+    grafico_qualidade = (
+        ggplot(dados, aes(x="carat", y="price", color="color"))
+        + geom_point(alpha=0.5, size=0.6)
+        + facet_grid(rows="clarity", cols="cut")
+        + scale_x_continuous(limits=(0, 5.1), breaks=[0, 2, 4])
+        + scale_y_continuous(
+            limits=(0, 20000), breaks=[0, 10000, 20000]
+        )
+        + theme_bw()
+        + theme(figure_size=(8, 4.5), legend_position="bottom")
+        + labs(
+            title="Preço e peso por corte, cor e clareza",
+            subtitle="Clareza: " + " e ".join(par),
+            x="Peso (quilates)",
+            y="Preço (US$)",
+            color="Cor"
+        )
+    )
+
+    grafico_qualidade.show()
+```
+
+A principal dificuldade foi mostrar muitas combinações de corte, cor e clareza sem esconder os pontos ou tornar os painéis pequenos demais. Por isso, separei os cortes nas colunas, a clareza nas linhas e representei a cor do diamante pelas cores dos pontos. Dividi a clareza em quatro pares para facilitar a leitura, preservando todas as observações e os mesmos limites dos eixos. A tendência de aumento do preço com o peso permanece visível nas combinações com mais observações, mas a relação não é idêntica: para pesos semelhantes, os preços variam conforme a configuração. Algumas combinações possuem poucos diamantes, o que limita a comparação visual; os gráficos também não permitem atribuir uma diferença de preço a uma única característica isoladamente.
+
+```{python}
+from datetime import datetime
+
+print(datetime.now().astimezone())
+```
